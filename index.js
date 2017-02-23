@@ -18,7 +18,7 @@ function handler(req, res, next) {
     obj.params = req.params
     obj.query = req.query
 
-    res.header("Content-Type", "application/json")  
+    res.header("Content-Type", "application/json")
     res.send(obj)
 }
 
@@ -29,7 +29,20 @@ app.use(function (req, res, next) {
 });
 
 // parse application/json
-app.use(multer({ dest: __dirname + '/uploads/' }).any());
+//
+var upload_path = __dirname + '/public/files/';
+
+// Make multer save the original file properly
+storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, upload_path)
+    },
+    filename: function (req, file, cb) {
+        cb(null, file.originalname)
+    }
+})
+
+app.use(multer({ dest: upload_path, storage: storage }).any())
 app.use(bodyParser.json()); // for parsing application/json
 app.use(bodyParser.urlencoded({ extended: true })); // for parsing application/x-www-form-urlencoded
 app.use(express.static('public'));
@@ -43,12 +56,68 @@ app.get('/quotes', (req, res) => {
 
 app.post('/quotes', (req, res) => {
     db.collection('quotes').save(req.body, (err, result) => {
-        if (err) return console.log(err)        
+        if (err) return console.log(err)
         res.header("Content-Type", "application/json")
         res.send(result)
     })
 })
-// app.post('/quotes', handler);
+
+app.post('/file', (req, res) => {
+    if (req.files) {
+        var fullUrl =
+            req.protocol + '://' +
+            req.get('host') + '/files/' +
+            req.files[0].originalname;
+
+        var obj = {
+            file: fullUrl
+        }
+
+        res.header("Content-Type", "application/json")
+        res.send(obj);
+    } else {
+        res.status(400)
+        res.send('Invalid data.')
+    }
+});
+
+app.get('/profile', (req, res) => {
+    db.collection('profile').find().toArray(function (err, results) {
+        res.header("Content-Type", "application/json")
+        res.send(results)
+    })
+})
+
+app.post('/profile', (req, res) => {
+    if (req.files && req.body) {
+        // Take full url for first file
+        var fullUrl =
+            req.protocol + '://' +
+            req.get('host') + '/files/' +
+            req.files[0].originalname;
+
+        var obj = {
+            name: req.body.name,
+            url: fullUrl
+        }
+
+        db.collection('profile').save(obj, (err, result) => {
+            if (err) {
+                console.log(err)
+                res.status(500)
+                res.send('An error ocurred while saving the data.')
+                return;
+            }
+
+            res.header("Content-Type", "application/json")
+            res.status(200)
+            res.send(obj)
+        })
+    } else {
+        res.status(400)
+        res.send('Invalid data.')
+    }
+})
 
 MongoClient.connect(url, (err, database) => {
     if (err) return console.log(err)
